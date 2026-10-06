@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Четверть под контролем</title>
+<style>
+:root{--bg:#f4f6fb;--c:#fff;--t:#1d2433;--m:#69728a;--a:#4f46e5;--ok:#16a34a;--bad:#dc2626;--b:#dde2ee}
+@media(prefers-color-scheme:dark){:root{--bg:#10131c;--c:#1a1f2e;--t:#e8ebf5;--m:#9aa3bd;--b:#2c3349}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--t)}
+header{padding:14px 16px;font-weight:700;font-size:20px}
+nav{display:flex;gap:6px;padding:0 12px 10px;overflow-x:auto}
+nav button{flex:1;white-space:nowrap}
+main{max-width:860px;margin:auto;padding:0 12px 40px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:14px;margin:10px 0}
+button,input,select,textarea{font:inherit;color:var(--t);background:var(--c);border:1px solid var(--b);border-radius:10px;padding:9px 11px}
+button{cursor:pointer;background:var(--a);color:#fff;border:0}button.g{background:var(--c);color:var(--t);border:1px solid var(--b)}
+nav button.on{background:var(--a);color:#fff}nav button:not(.on){background:var(--c);color:var(--t);border:1px solid var(--b)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.row>*{flex:1 1 130px}label{font-size:13px;color:var(--m);display:block}
+textarea{width:100%;min-height:130px;font-family:monospace}
+.bar{height:12px;background:var(--b);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--a)}
+.chip{display:inline-block;border:1px solid var(--b);border-radius:20px;padding:3px 10px;margin:3px;font-size:14px}
+.chip b{cursor:pointer;color:var(--bad);margin-left:6px}
+.big{font-size:26px;font-weight:700}.ok{color:var(--ok)}.bad{color:var(--bad)}.m{color:var(--m);font-size:14px}
+.fc{min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;cursor:pointer;padding:20px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;display:none;max-width:90%}
+.warn{background:#fef3c7;color:#78350f;border-radius:10px;padding:8px 12px;margin:8px 12px;font-size:14px}
+</style></head><body>
+<header>🎯 Четверть под контролем</header>
+<div id="w"></div>
+<nav id="nav"></nav><main id="v"></main><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ok=true,mem={};try{localStorage.setItem('_t','1');localStorage.removeItem('_t')}catch(e){ok=false}
+const load=(k,d)=>{try{if(ok){const v=localStorage.getItem(k);if(v)return JSON.parse(v)}}catch(e){}return mem[k]??d};
+const save=(k,v)=>{mem[k]=v;if(ok)try{localStorage.setItem(k,JSON.stringify(v))}catch(e){ok=false;warn()}};
+const warn=()=>{$('#w').innerHTML=ok?'':'<div class="warn">Браузер не разрешает сохранение: всё работает, но данные пропадут при закрытии вкладки.</div>'};
+let S=load('bg_s',{subs:[],sel:null}),C=load('bg_c',{custom:[],known:[]}),T=load('bg_t',{text:'',base:'А',lead:10,on:false});
+let tab='g',showForm=false,fi=0,flip=false,fsub='all',notified={};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2800)};
+const num=id=>{const v=$('#'+id).value.trim().replace(',','.');return v===''?NaN:Number(v)};
+const sub=()=>S.subs.find(s=>s.id==S.sel);
+const r1=x=>Math.round(x*10)/10;
+
+function calc(s){
+ const sum=a=>a.reduce((p,c)=>p+c,0);
+ const remL=Math.max(0,s.n-s.les.length),remS=Math.max(0,s.k-s.sor.length),cd=s.soch!=null;
+ const earned=25*sum(s.les)/(10*s.n)+25*sum(s.sor)/(s.k*s.sm)+(cd?50*s.soch/s.cm:0);
+ const rem=25*remL/s.n+25*remS/s.k+(cd?0:50);
+ return{earned,rem,max:earned+rem,need:s.goal-earned,x:rem>0?(s.goal-earned)/rem:null,remL,remS,cd};
+}
+function addSub(){
+ const name=$('#sn').value.trim(),goal=num('sg'),n=num('sl'),k=num('sk'),sm=num('ss'),cm=num('sc');
+ if(!name)return toast('Введите название предмета');
+ if(!(goal>0&&goal<=100))return toast('Цель: от 1 до 100%');
+ if(!(Number.isInteger(n)&&n>0))return toast('Число уроков — целое, больше 0');
+ if(!(Number.isInteger(k)&&k>0&&k<=6))return toast('Число СОР: от 1 до 6');
+ if(!(sm>0&&cm>0))return toast('Максимум баллов за СОР и СОЧ должен быть больше 0');
+ const s={id:Date.now(),name,goal,n,k,sm,cm,les:[],sor:[],soch:null};
+ S.subs.push(s);S.sel=s.id;showForm=false;save('bg_s',S);render();
+}
+function demo(){
+ const s={id:Date.now(),name:'Физика (ДЕМО, вымышленные оценки)',goal:85,n:30,k:3,sm:20,cm:40,les:[8,9,7,8,10,6,8,9,7,8],sor:[16],soch:null};
+ S.subs.push(s);S.sel=s.id;save('bg_s',S);render();
+}
+function delSub(){if(confirm('Удалить предмет «'+sub().name+'»?')){S.subs=S.subs.filter(x=>x.id!=S.sel);S.sel=S.subs[0]?.id??null;save('bg_s',S);render()}}
+function addLes(){const s=sub(),v=num('nl');
+ if(isNaN(v))return toast('Введите оценку за урок');
+ if(!Number.isInteger(v)||v<1||v>10)return toast('Оценка за урок — целое число 1–10');
+ if(s.les.length>=s.n)return toast('Все '+s.n+' уроков уже внесены');
+ s.les.push(v);save('bg_s',S);render()}
+function addSor(){const s=sub(),v=num('nr');
+ if(isNaN(v))return toast('Введите баллы за СОР');
+ if(v<0||v>s.sm)return toast('Баллы за СОР: от 0 до '+s.sm);
+ if(s.sor.length>=s.k)return toast('Все '+s.k+' СОР уже внесены');
+ s.sor.push(v);save('bg_s',S);render()}
+function setSoch(){const s=sub(),v=num('nc');
+ if(isNaN(v))return toast('Введите баллы за СОЧ');
+ if(v<0||v>s.cm)return toast('Баллы за СОЧ: от 0 до '+s.cm);
+ s.soch=v;save('bg_s',S);render()}
+function del(t,i){const s=sub();if(t=='c')s.soch=null;else s[t].splice(i,1);save('bg_s',S);render()}
+function chart(a){
+ if(a.length<2)return'<p class="m">График появится после двух оценок за уроки.</p>';
+ const W=600,H=190,P=26,X=i=>P+i*(W-2*P)/(a.length-1),Y=v=>H-P-(v-1)*(H-2*P)/9;
+ let run=0;const av=a.map((v,i)=>(run+=v)/(i+1));
+ const pts=b=>b.map((v,i)=>X(i)+','+Y(v)).join(' ');
+ const l3=a.slice(-3),p3=a.slice(-6,-3),m=x=>x.reduce((p,c)=>p+c,0)/x.length;
+ const tr=p3.length?(m(l3)>m(p3)+.2?'📈 Последние уроки лучше предыдущих':m(l3)<m(p3)-.2?'📉 Последние уроки хуже предыдущих':'➡️ Уровень стабильный'):'';
+ return`<svg viewBox="0 0 ${W} ${H}" style="width:100%"><g stroke="#8884" >${[1,4,7,10].map(v=>`<line x1="${P}" x2="${W-P}" y1="${Y(v)}" y2="${Y(v)}"/><text x="2" y="${Y(v)+4}" font-size="11" fill="#888" stroke="none">${v}</text>`).join('')}</g>
+ <polyline fill="none" stroke="#4f46e5" stroke-width="2" points="${pts(a)}"/><polyline fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="6 4" points="${pts(av)}"/>
+ ${a.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" fill="#4f46e5"/>`).join('')}</svg>
+ <p class="m">Синяя — оценки, зелёная пунктирная — средний балл (сейчас ${r1(av[av.length-1])}). ${tr}</p>`;
+}
+function vGrades(){
+ let h='';
+ const form=`<div class="card"><b>Новый предмет</b><div class="row"><div><label>Название</label><input id="sn" placeholder="Например, Химия"></div><div><label>Цель, %</label><input id="sg" type="number" value="85"></div><div><label>Уроков в четверти</label><input id="sl" type="number" value="30"></div></div>
+ <div class="row" style="margin-top:8px"><div><label>СОР за четверть (шт.)</label><input id="sk" type="number" value="2"></div><div><label>Макс. баллов за СОР</label><input id="ss" type="number" value="20"></div><div><label>Макс. баллов за СОЧ</label><input id="sc" type="number" value="40"></div></div>
+ <p><button onclick="addSub()">Создать</button> <button class="g" onclick="showForm=false;render()">Отмена</button></p></div>`;
+ if(!S.subs.length)return`<div class="card"><p>Пока нет ни одного предмета. Создайте первый и укажите цель четверти (85% = «5») — приложение посчитает, сколько нужно набирать.</p><button onclick="showForm=true;render()">+ Добавить предмет</button> <button class="g" onclick="demo()">Загрузить демо</button></div>`+(showForm?form:'');
+ h+=`<div class="row"><select onchange="S.sel=+this.value;save('bg_s',S);render()">${S.subs.map(x=>`<option value="${x.id}" ${x.id==S.sel?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button onclick="showForm=!showForm;render()">+ Предмет</button><button class="g" onclick="delSub()">Удалить предмет</button></div>`;
+ if(showForm)h+=form;
+ const s=sub(),c=calc(s),x0=s.goal/100;
+ let plan,cls='';
+ if(c.rem<=0){const f=c.earned>=s.goal;plan=f?'🎉 Четверть закончена, цель достигнута.':'Все оценки внесены, цель не достигнута.';cls=f?'ok':'bad'}
+ else if(c.x<=0){plan='✅ Цель уже обеспечена, даже если дальше будут минимальные баллы. Главное — не пропускать работы.';cls='ok'}
+ else if(c.x>1){plan='⚠️ Цель недостижима: даже с максимумом за всё оставшееся выйдет '+r1(c.max)+'%.';cls='bad'}
+ else{const L=r1(c.x*10),L0=r1(x0*10);
+  plan=`<div>Минимум <b>на каждом уроке</b>: <b>${L}</b> из 10 (округляйте вверх: ${Math.ceil(c.x*10-1e-9)})${c.remL?'':' — уроки закончились'}</div>`+
+  (c.remS?`<div>Минимум <b>за каждый оставшийся СОР</b>: <b>${r1(c.x*s.sm)}</b> из ${s.sm}</div>`:'')+
+  (c.cd?'':`<div>Минимум <b>за СОЧ</b>: <b>${r1(c.x*s.cm)}</b> из ${s.cm}</div>`)+
+  `<p class="${c.x>x0+.005?'bad':'ok'}">${c.x>x0+.005?`Нужно поднажать: изначально хватало ${L0} на уроке, теперь нужно ${L}.`:`Можно идти в изначальном темпе (${L0} на уроке) или даже чуть спокойнее.`}</p>`}
+ h+=`<div class="card"><b>${esc(s.name)}</b> · цель ${s.goal}%<div class="big">${r1(c.earned)}% <span class="m">набрано из ${r1(c.max)}% возможных</span></div><div class="bar"><i style="width:${Math.min(100,c.earned/s.goal*100)}%"></i></div><p class="m">Полоса — доля пути к цели.</p><div class="${cls}">${plan}</div><p class="m">Расчёт: оставшиеся баллы равномерно делятся так, чтобы вместе с набранным получилась цель. Пересчёт идёт после каждой внесённой оценки.</p></div>`;
+ h+=`<div class="card"><b>Уроки (формативная, 25%)</b> · внесено ${s.les.length} из ${s.n}<div>${s.les.length?s.les.map((v,i)=>`<span class="chip">${v}<b onclick="del('les',${i})">×</b></span>`).join(''):'<span class="m">Оценок пока нет</span>'}</div>
+ <div class="row"><input id="nl" type="number" placeholder="Оценка 1–10" onkeydown="if(event.key=='Enter')addLes()"><button onclick="addLes()">Добавить оценку</button></div>${chart(s.les)}</div>`;
+ h+=`<div class="card"><b>СОР (25%)</b> · внесено ${s.sor.length} из ${s.k}, максимум ${s.sm}<div>${s.sor.length?s.sor.map((v,i)=>`<span class="chip">${v}/${s.sm}<b onclick="del('sor',${i})">×</b></span>`).join(''):'<span class="m">Пока нет</span>'}</div>
+ <div class="row"><input id="nr" type="number" placeholder="Баллы СОР"><button onclick="addSor()">Добавить СОР</button></div></div>
+ <div class="card"><b>СОЧ (50%)</b> · максимум ${s.cm}<div>${s.soch!=null?`<span class="chip">${s.soch}/${s.cm}<b onclick="del('c')">×</b></span>`:'<span class="m">Ещё не писали</span>'}</div>
+ <div class="row"><input id="nc" type="number" placeholder="Баллы СОЧ"><button onclick="setSoch()">Сохранить СОЧ</button></div><p class="m">Символ × удаляет запись — это на случай ошибки ввода, а не пересдачи.</p></div>`;
+ return h;
+}
+const CARDS=[['Физика','Скорость','v = s / t'],['Физика','Второй закон Ньютона','F = m·a'],['Физика','Закон Ома для участка цепи','I = U / R'],['Физика','Плотность','ρ = m / V'],['Физика','Давление','p = F / S'],
+['Математика','Дискриминант','D = b² − 4ac'],['Математика','Корни квадратного уравнения','x = (−b ± √D) / 2a'],['Математика','Разность квадратов','a² − b² = (a−b)(a+b)'],
+['Геометрия','Теорема Пифагора','a² + b² = c²'],['Геометрия','Площадь круга','S = π·r²'],['Геометрия','Площадь треугольника','S = ½·a·h'],
+['Химия','Количество вещества','n = m / M'],['Химия','Молярный объём газа (н.у.)','Vm = 22,4 л/моль'],['Химия','Массовая доля','ω = m(в-ва) / m(р-ра) · 100%'],
+['Биология','Уравнение фотосинтеза','6CO₂ + 6H₂O + свет → C₆H₁₂O₆ + 6O₂'],['География','Средняя температура','t = сумма температур / число измерений'],['География','Относительная высота','Н = Н₁ − Н₂ (разность абсолютных высот)']];
+const allC=()=>CARDS.concat(C.custom.map(x=>[x[0],x[1],x[2]]));
+function vCards(){
+ const all=allC(),subs=[...new Set(all.map(x=>x[0]))],list=all.filter(x=>fsub=='all'||x[0]==fsub);
+ let h=`<div class="row"><select onchange="fsub=this.value;fi=0;flip=false;render()"><option value="all">Все предметы</option>${subs.map(s=>`<option ${s==fsub?'selected':''}>${esc(s)}</option>`).join('')}</select><button class="g" onclick="shuf()">Перемешать</button></div>`;
+ if(!list.length)h+='<div class="card">В этом предмете нет карточек.</div>';
+ else{fi=Math.min(fi,list.length-1);const c=list[fi],k=c[0]+'|'+c[1],kn=C.known.includes(k);
+  h+=`<div class="card fc" onclick="flip=!flip;render()">${flip?'<b>'+esc(c[2])+'</b>':esc(c[1])}</div><p class="m" style="text-align:center">${esc(c[0])} · ${fi+1} из ${list.length} · ${kn?'✅ знаю':'ещё учу'} · нажмите на карточку, чтобы перевернуть</p>
+  <div class="row"><button class="g" onclick="fi=(fi-1+${list.length})%${list.length};flip=false;render()">← Назад</button><button onclick="mark()">${kn?'Снять «знаю»':'Знаю'}</button><button class="g" onclick="fi=(fi+1)%${list.length};flip=false;render()">Далее →</button></div>`;
+  window._l=list}
+ h+=`<div class="card"><b>Своя карточка</b><div class="row"><div><label>Предмет</label><input id="cs" placeholder="Физика"></div><div><label>Вопрос</label><input id="cq"></div><div><label>Ответ / формула</label><input id="ca"></div></div><p><button onclick="addCard()">Добавить</button></p></div>`;
+ return h;
+}
+function shuf(){const n=C.custom.length;CARDS.sort(()=>Math.random()-.5);fi=0;flip=false;render()}
+function mark(){const c=window._l[fi],k=c[0]+'|'+c[1];C.known=C.known.includes(k)?C.known.filter(x=>x!=k):C.known.concat(k);save('bg_c',C);render()}
+function addCard(){const a=$('#cs').value.trim(),b=$('#cq').value.trim(),c=$('#ca').value.trim();
+ if(!a||!b||!c)return toast('Заполните предмет, вопрос и ответ');C.custom.push([a,b,c]);save('bg_c',C);toast('Карточка добавлена');render()}
+
+const DAYS={пн:1,вт:2,ср:3,чт:4,пт:5,сб:6,вс:0},DN=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const tm=s=>{const[a,b]=s.split(':');return+a*60+ +b};
+function parseT(){
+ const out=[],bad=[];
+ T.text.split('\n').forEach(l=>{if(!l.trim())return;
+  const m=l.match(/^\s*(?:(пн|вт|ср|чт|пт|сб|вс)\s+)?(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})\s+(.+)$/i);
+  if(!m||tm(m[2])>=tm(m[3])){bad.push(l);return}
+  const tk=m[4].trim().split(/\s+/);let room=null,ri=-1;
+  for(let i=tk.length-1;i>=0;i--){const r=tk[i].match(/^([A-Za-zА-Яа-я]?)-?(\d{3})([A-Za-zА-Яа-я]?)$/);if(r){room=r;ri=i;break}}
+  const name=tk.filter((_,i)=>i!=ri).join(' ')||'Урок',L=room?(room[1]||room[3]).toUpperCase():'';
+  out.push({d:m[1]?[DAYS[m[1].toLowerCase()]]:[1,2,3,4,5],s:tm(m[2]),e:tm(m[3]),st:m[2],et:m[3],name,
+   room:room?room[2]:null,floor:room?room[2][0]:null,bld:room?'Корпус '+(L||T.base.toUpperCase()):null})});
+ return{out,bad};
+}
+const lessonTxt=x=>`${x.name}: ${x.st}–${x.et}`+(x.room?`, каб. ${x.room}, ${x.floor} этаж, ${x.bld}`:', кабинет не распознан');
+function nextL(L){const n=new Date(),nm=n.getHours()*60+n.getMinutes();
+ for(let o=0;o<8;o++){const d=(n.getDay()+o)%7,c=L.filter(x=>x.d.includes(d)&&(o>0||x.s>nm)).sort((a,b)=>a.s-b.s)[0];if(c)return{l:c,o}}return null}
+function vSched(){
+ const{out,bad}=parseT(),nx=nextL(out);
+ let h='<div class="card"><b>Следующий урок</b>';
+ h+=!T.text.trim()?'<p class="m">Расписание пустое — вставьте его ниже или загрузите демо.</p>':!out.length?'<p class="bad">Ни одна строка не распознана. Проверьте формат.</p>':!nx?'<p class="m">Больше уроков по расписанию нет.</p>':`<div class="big">${esc(nx.l.name)}</div><div>${nx.l.st}–${nx.l.et} · ${nx.o==0?'сегодня':nx.o==1?'завтра':DN[(new Date().getDay()+nx.o)%7]}</div>${nx.l.room?`<div>Кабинет <b>${nx.l.room}</b> · <b>${nx.l.floor}</b> этаж · <b>${esc(nx.l.bld)}</b></div>`:'<div class="m">Кабинет не указан или не распознан</div>'}`;
+ h+='</div>';
+ h+=`<div class="card"><b>Расписание</b><p class="m">Одна строка — один урок: <code>Пн 08:30-09:15 Математика 214Б</code>. Без дня недели — урок каждый будний день. Фото расписания приложение читать не умеет (нет распознавания) — перепишите текстом.</p>
+ <textarea id="tt" placeholder="Пн 08:30-09:15 Математика 214&#10;Пн 09:25-10:10 Физика 312Б">${esc(T.text)}</textarea>
+ <div class="row"><div><label>Корпус, если у кабинета нет буквы</label><input id="tb" value="${esc(T.base)}"></div><div><label>Уведомлять за (мин)</label><input id="tl" type="number" value="${T.lead}"></div></div>
+ <p class="m">Правила кабинетов: этаж = первая цифра номера (1xx — 1 этаж, 2xx — 2), буква до или после номера = корпус (Б → «Корпус Б»), без буквы — корпус из поля выше. Если у вашей школы иначе, скажите — подправим правила.</p>
+ <p><button onclick="saveT()">Сохранить расписание</button> <button class="g" onclick="demoT()">Демо (вымышленное)</button></p>${bad.length?`<p class="bad">Не распознаны строки: ${bad.map(esc).join(' | ')}</p>`:''}</div>`;
+ if(out.length){const td=out.filter(x=>x.d.includes(new Date().getDay())).sort((a,b)=>a.s-b.s);
+  h+=`<div class="card"><b>Сегодня</b>${td.length?td.map(x=>`<div>${esc(lessonTxt(x))}</div>`).join(''):'<p class="m">Сегодня уроков нет.</p>'}</div>`}
+ h+=`<div class="card"><b>Уведомления</b><p class="m">Работают, пока страница открыта в браузере; на заблокированный экран при закрытом сайте они не придут — для этого нужен сервер и установленное приложение. Некоторые мобильные браузеры вообще блокируют такие уведомления.</p>
+ <label style="display:flex;gap:8px;align-items:center;color:inherit"><input type="checkbox" ${T.on?'checked':''} onchange="T.on=this.checked;save('bg_t',T);if(this.checked)perm()"> Напоминать о следующем уроке</label>
+ <p><button class="g" onclick="testN()">Проверить уведомление</button></p></div>`;
+ return h;
+}
+function saveT(){T.text=$('#tt').value;T.base=$('#tb').value.trim()||'А';const l=num('tl');T.lead=l>=0&&l<=120?l:10;save('bg_t',T);toast('Сохранено');render()}
+function demoT(){T.text='Пн 08:30-09:15 Математика 214\nПн 09:25-10:10 Физика 312Б\nВт 08:30-09:15 Химия 105\nСр 09:25-10:10 География Б207\nЧт 08:30-09:15 Биология 118Б\nПт 08:30-09:15 Геометрия 214';save('bg_t',T);render()}
+function perm(){try{Notification.requestPermission().then(p=>p!='granted'&&toast('Разрешение на уведомления не выдано'))}catch(e){toast('Браузер не поддерживает уведомления')}}
+function notify(t,b){try{if(!('Notification' in window))return toast(t+' — '+b);if(Notification.permission!='granted')return toast('Сначала разрешите уведомления');new Notification(t,{body:b})}catch(e){toast(t+' — '+b)}}
+function testN(){if(!('Notification' in window))return toast('Браузер не поддерживает уведомления');
+ Notification.requestPermission().then(p=>{if(p!='granted')return toast('Разрешение не выдано');const nx=nextL(parseT().out);notify('Тест: следующий урок',nx?lessonTxt(nx.l):'Расписание пока не задано')})}
+setInterval(()=>{if(!T.on)return;const n=new Date(),nm=n.getHours()*60+n.getMinutes();
+ parseT().out.filter(x=>x.d.includes(n.getDay())&&x.s-nm>=0&&x.s-nm<=T.lead).forEach(x=>{const k=n.toDateString()+x.s;if(!notified[k]){notified[k]=1;notify('Скоро урок',lessonTxt(x))}})},30000);
+
+function vAI(){return`<div class="card"><b>🤖 Помощник по учёбе</b><p><b>Не подключён.</b> Это статичный сайт без сервера и ключей, поэтому настоящий ИИ здесь не работает, и ответов вы не получите.</p>
+ <textarea disabled placeholder="Поле будет активно после подключения ИИ через сервер"></textarea><p><button disabled>Отправить</button></p>
+ <p class="m">Что нужно для подключения: небольшой серверный прокси с ключом API, в запросе — инструкция «отвечай только по школьной программе, на посторонние темы вежливо отказывайся». Пока можно скопировать эту инструкцию и вставить в любой ИИ-чат:</p>
+ <button class="g" onclick="cp()">Скопировать инструкцию</button></div>
+ <div class="card"><b>О приложении</b><p class="m">Данные (предметы, оценки, карточки, расписание) хранятся только в этом браузере на этом устройстве. На другом телефоне или ноутбуке их не будет. Демо-предметы и демо-расписание вымышленные. Формулы карточек проверяйте по учебнику.</p></div>`}
+function cp(){const t='Ты помощник школьника. Отвечай только на вопросы по школьной программе (математика, физика, химия, биология, география, и т.д.), объясняй пошагово и просто. На посторонние темы вежливо отказывайся и предлагай вернуться к учёбе.';
+ try{navigator.clipboard.writeText(t).then(()=>toast('Скопировано'),()=>toast(t))}catch(e){toast(t)}}
+
+const TABS=[['g','📊 Оценки',vGrades],['c','🗂 Карточки',vCards],['s','🗓 Расписание',vSched],['a','🤖 Помощник',vAI]];
+function render(){warn();
+ $('#nav').innerHTML=TABS.map(t=>`<button class="${t[0]==tab?'on':''}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join('');
+ $('#v').innerHTML=TABS.find(t=>t[0]==tab)[2]()}
+render();
+</script></body></html>
